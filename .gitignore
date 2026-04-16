@@ -1,0 +1,54 @@
+# Python caches
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+files/rag_env/
+
+# Environment and local secrets
+.env
+.env.*
+!.env.example
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Build / test / tool caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+.cache/
+
+# Logs
+*.log
+
+# Generated retrieval indexes and local model artifacts
+faiss_index/
+files/rag_pipeline/index/
+
+# Large local datasets / outputs
+data/images/
+outputs/
+generated/
+
+# Audio and media artifacts you may not want in git by default
+files/assets/music/*.wav
+files/assets/music/*.m4a
+files/assets/music/*.aac
+files/assets/music/*.mp4
+
+# Keep placeholder files and metadata tracked
+!files/assets/music/.gitkeep
+!files/assets/music_library.json
+!files/assets/README.md
