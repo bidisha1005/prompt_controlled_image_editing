@@ -1,0 +1,1414 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>RAG Image Editor</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Sora:wght@300;400;600;700&display=swap" rel="stylesheet" />
+
+  <style>
+    /* ── Clean Professional Design ─────────────────────────── */
+    :root {
+      --bg:          #f8f9fb;
+      --surface:     #ffffff;
+      --surface-alt: #f3f5f8;
+      --border:      #e1e5eb;
+      --border-light:#eff2f7;
+      --accent:      #6366f1;
+      --accent-light:#818cf8;
+      --accent-glow: rgba(99, 102, 241, 0.15);
+      --text:        #1a1f36;
+      --text-secondary:#5a6477;
+      --text-muted:  #8a92a6;
+      --success:     #10b981;
+      --success-light:#6ee7b7;
+      --warn:        #f59e0b;
+      --error:       #ef4444;
+      --font-mono:   "Space Mono", monospace;
+      --font-sans:   "Sora", sans-serif;
+      --radius:      12px;
+      --transition:  200ms cubic-bezier(0.4, 0, 0.2, 1);
+      --shadow-sm:   0 2px 8px rgba(0,0,0,.08);
+      --shadow-md:   0 8px 24px rgba(0,0,0,.12);
+      --shadow-lg:   0 16px 48px rgba(0,0,0,.16);
+      --gradient-primary: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+      --gradient-border: linear-gradient(135deg, #6366f1 0%, #8b5cf6 80%, transparent);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font-sans);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* ── Layout ────────────────────────────────────────────── */
+    .app { position: relative; display: flex; flex-direction: column; min-height: 100vh; }
+
+    /* ── Header ────────────────────────────────────────────── */
+    header {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 20px 32px;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+      box-shadow: var(--shadow-sm);
+      position: sticky; top: 0; z-index: 100;
+    }
+
+    .logo {
+      width: 48px; height: 48px;
+      background: var(--gradient-primary);
+      border-radius: 12px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 24px; flex-shrink: 0;
+      color: white;
+      box-shadow: 0 4px 12px rgba(99,102,241,0.2);
+      animation: float 3s ease-in-out infinite;
+    }
+
+    @keyframes float { 0%, 100% { transform: translateY(0px); } 50% { transform: translateY(-8px); } }
+
+    .header-title { 
+      font-size: 18px; 
+      font-weight: 700; 
+      letter-spacing: -0.5px;
+      color: var(--text);
+    }
+    .header-sub   { 
+      font-size: 12px; 
+      color: var(--text-muted); 
+      margin-top: 4px; 
+      font-weight: 500;
+      letter-spacing: 0.2px;
+    }
+
+    .badge {
+      margin-left: auto;
+      font-size: 11px;
+      background: linear-gradient(135deg, rgba(99,102,241,0.08), rgba(139,92,246,0.04));
+      border: 1px solid var(--accent-glow);
+      color: var(--accent);
+      padding: 8px 16px; 
+      border-radius: 20px;
+      font-weight: 700;
+      letter-spacing: 0.3px;
+      box-shadow: inset 0 1px 2px rgba(99,102,241,0.1);
+      text-transform: uppercase;
+    }
+    .badge.connected { 
+      background: linear-gradient(135deg, rgba(16,185,129,0.08), rgba(110,231,183,0.04));
+      border-color: rgba(16,185,129,0.2);
+      color: var(--success);
+    }
+
+    /* ── Main grid ─────────────────────────────────────────── */
+    .main {
+      display: grid;
+      grid-template-columns: 380px 1fr 320px;
+      gap: 16px;
+      flex: 1;
+      min-height: 0;
+      padding: 16px;
+    }
+
+    /* ── Panel shared ──────────────────────────────────────── */
+    .panel {
+      border: 1px solid var(--border);
+      display: flex; 
+      flex-direction: column;
+      overflow-y: auto;
+      border-radius: var(--radius);
+      background: var(--surface);
+      box-shadow: var(--shadow-sm);
+    }
+
+    .panel-header {
+      padding: 18px 24px;
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; gap: 12px;
+      position: sticky; top: 0;
+      background: var(--surface-alt);
+      z-index: 10;
+    }
+    .panel-title { 
+      font-size: 11px; 
+      font-weight: 800; 
+      letter-spacing: 1px; 
+      text-transform: uppercase; 
+      color: var(--text-muted);
+    }
+    .panel-body  { 
+      padding: 24px; 
+      flex: 1; 
+      display: flex; 
+      flex-direction: column; 
+      gap: 18px; 
+    }
+
+    /* ── Upload zone ───────────────────────────────────────── */
+    .upload-zone {
+      border: 2px dashed var(--border);
+      border-radius: var(--radius);
+      min-height: 220px;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 12px; cursor: pointer;
+      transition: var(--transition);
+      background: var(--surface-alt);
+      position: relative; overflow: hidden;
+    }
+    .upload-zone::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(circle at 50% 50%, rgba(99,102,241,0.05) 0%, transparent 70%);
+      opacity: 0;
+      transition: opacity var(--transition);
+    }
+    .upload-zone:hover::before, 
+    .upload-zone.dragover::before {
+      opacity: 1;
+    }
+    .upload-zone:hover, .upload-zone.dragover {
+      border-color: var(--accent);
+      background: #f0f3ff;
+      box-shadow: 0 0 24px rgba(99,102,241,0.1);
+    }
+    .upload-zone.has-image { 
+      border-style: solid; 
+      border-color: var(--accent); 
+      background: transparent;
+    }
+
+    .upload-zone img {
+      width: 100%; height: 100%; object-fit: contain;
+      position: absolute; inset: 0; border-radius: var(--radius);
+    }
+
+    .upload-placeholder { 
+      text-align: center; 
+      z-index: 1; 
+      animation: slideUp 0.4s ease;
+    }
+    @keyframes slideUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+    
+    .upload-icon  { 
+      font-size: 40px; 
+      margin-bottom: 8px; 
+      animation: bounce 2s ease-in-out infinite;
+    }
+    @keyframes bounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
+    
+    .upload-label { 
+      font-size: 14px; 
+      font-weight: 700; 
+      color: var(--text);
+      letter-spacing: -0.3px;
+    }
+    .upload-sub   { 
+      font-size: 12px; 
+      color: var(--text-muted); 
+      margin-top: 4px;
+      font-weight: 500;
+    }
+
+    input[type=file] { display: none; }
+
+    /* ── Form controls ─────────────────────────────────────── */
+    label.field-label { 
+      font-size: 11px; 
+      font-weight: 800; 
+      color: var(--text); 
+      letter-spacing: 0.8px; 
+      text-transform: uppercase; 
+      display: block; 
+      margin-bottom: 10px;
+    }
+
+    textarea.prompt-input {
+      width: 100%; 
+      background: var(--surface-alt);
+      border: 1px solid var(--border); 
+      border-radius: var(--radius);
+      color: var(--text); 
+      font-family: var(--font-sans); 
+      font-size: 14px;
+      padding: 14px 16px; 
+      resize: vertical; 
+      min-height: 100px;
+      line-height: 1.6; 
+      transition: var(--transition);
+    }
+    textarea.prompt-input::placeholder { color: var(--text-muted); opacity: 0.7; }
+    textarea.prompt-input:focus { 
+      outline: none; 
+      border-color: var(--accent);
+      background: #f0f3ff;
+      box-shadow: 0 0 0 3px rgba(99,102,241,0.1), inset 0 0 0 1px var(--accent);
+    }
+
+    .slider-row { 
+      display: flex; 
+      align-items: center; 
+      gap: 14px; 
+    }
+    .slider-row input[type=range] {
+      flex: 1; 
+      -webkit-appearance: none; 
+      height: 5px;
+      background: linear-gradient(90deg, var(--border) 0%, var(--border-light) 100%);
+      border-radius: 3px; 
+      cursor: pointer;
+      transition: background var(--transition);
+    }
+    .slider-row input[type=range]::-webkit-slider-thumb {
+      -webkit-appearance: none; 
+      width: 16px; 
+      height: 16px;
+      border-radius: 50%; 
+      background: var(--gradient-primary);
+      cursor: pointer; 
+      transition: var(--transition);
+      box-shadow: 0 2px 8px rgba(99,102,241,0.3);
+      border: 2px solid white;
+    }
+    .slider-row input[type=range]::-webkit-slider-thumb:hover { 
+      transform: scale(1.2);
+      box-shadow: 0 4px 12px rgba(99,102,241,0.4);
+    }
+    .slider-val { 
+      font-family: var(--font-mono); 
+      font-size: 13px; 
+      color: var(--accent); 
+      width: 40px; 
+      text-align: right; 
+      min-width: 40px;
+      font-weight: 600;
+    }
+
+    .toggle-row { display: flex; align-items: center; gap: 14px; }
+    .toggle { position: relative; width: 48px; height: 28px; }
+    .toggle input { display: none; }
+    .toggle-track {
+      position: absolute; inset: 0; border-radius: 14px;
+      background: linear-gradient(135deg, var(--border), var(--border-light));
+      cursor: pointer; 
+      transition: var(--transition);
+      box-shadow: inset 0 1px 2px rgba(0,0,0,.05);
+    }
+    .toggle input:checked + .toggle-track { 
+      background: var(--gradient-primary);
+      box-shadow: 0 2px 8px rgba(99,102,241,0.2);
+    }
+    .toggle-thumb {
+      position: absolute; top: 3px; left: 3px;
+      width: 22px; height: 22px; border-radius: 50%;
+      background: white; transition: var(--transition); pointer-events: none;
+      box-shadow: 0 1px 4px rgba(0,0,0,.1);
+    }
+    .toggle input:checked ~ .toggle-thumb { left: 23px; }
+    .toggle-label { font-size: 14px; font-weight: 700; color: var(--text); }
+    .toggle-sub   { font-size: 12px; color: var(--text-muted); font-weight: 500; }
+
+    /* ── CTA button ────────────────────────────────────────── */
+    .btn-edit {
+      width: 100%; padding: 14px;
+      background: var(--gradient-primary);
+      border: none; border-radius: var(--radius);
+      color: white; font-family: var(--font-sans);
+      font-size: 14px; font-weight: 700; letter-spacing: 0.4px;
+      cursor: pointer; transition: var(--transition);
+      display: flex; align-items: center; justify-content: center; gap: 10px;
+      box-shadow: 0 4px 12px rgba(99,102,241,0.2);
+      text-transform: uppercase;
+      position: relative;
+      overflow: hidden;
+    }
+    .btn-edit::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(135deg, rgba(255,255,255,0.2), transparent);
+      opacity: 0;
+      transition: opacity var(--transition);
+    }
+    .btn-edit:hover:not(:disabled) {
+      background: linear-gradient(135deg, #7c3aed, #a78bfa);
+      box-shadow: 0 8px 20px rgba(99,102,241,0.3);
+      transform: translateY(-2px);
+    }
+    .btn-edit:hover:not(:disabled)::before {
+      opacity: 1;
+    }
+    .btn-edit:active:not(:disabled) {
+      transform: translateY(0);
+    }
+    .btn-edit:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    .btn-secondary {
+      padding: 9px 16px; 
+      border: 1px solid var(--border);
+      background: var(--surface);
+      border-radius: var(--radius);
+      color: var(--text-secondary); 
+      font-family: var(--font-sans);
+      font-size: 12px; 
+      font-weight: 700; 
+      cursor: pointer; 
+      transition: var(--transition);
+    }
+    .btn-secondary:hover { 
+      border-color: var(--accent);
+      color: var(--accent);
+      background: #f0f3ff;
+      box-shadow: 0 2px 8px rgba(99,102,241,0.1);
+    }
+    .btn-secondary:active {
+      transform: scale(0.98);
+    }
+
+    /* ── Canvas area ───────────────────────────────────────── */
+    .canvas-panel {
+      background: var(--surface);
+      display: flex; flex-direction: column;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow-sm);
+    }
+
+    .canvas-toolbar {
+      padding: 16px 20px; 
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; gap: 12px;
+      background: var(--surface-alt);
+    }
+    .canvas-toolbar .tool-btn {
+      padding: 8px 16px; 
+      border-radius: var(--radius);
+      border: 1px solid var(--border); 
+      background: var(--surface);
+      color: var(--text-secondary); 
+      font-size: 12px; 
+      cursor: pointer;
+      transition: var(--transition); 
+      font-family: var(--font-sans);
+      font-weight: 700;
+      letter-spacing: 0.3px;
+      text-transform: uppercase;
+    }
+    .canvas-toolbar .tool-btn.active,
+    .canvas-toolbar .tool-btn:hover { 
+      border-color: var(--accent);
+      color: var(--accent);
+      background: #f0f3ff;
+      box-shadow: 0 2px 8px rgba(99,102,241,0.1);
+    }
+
+    .canvas-stage {
+      flex: 1; display: flex; gap: 16px;
+      padding: 20px;
+      overflow: hidden;
+      background: var(--surface-alt);
+    }
+
+    .canvas-slot {
+      flex: 1; 
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      background: var(--surface);
+      overflow: hidden; 
+      position: relative;
+      display: flex; 
+      align-items: center; 
+      justify-content: center;
+      min-height: 440px;
+      transition: all var(--transition);
+      box-shadow: inset 0 1px 2px rgba(0,0,0,.02);
+    }
+    .canvas-slot:hover { 
+      border-color: var(--accent);
+      box-shadow: 0 4px 12px rgba(99,102,241,0.1), inset 0 1px 2px rgba(0,0,0,.02);
+    }
+    .canvas-slot img { 
+      max-width: 100%; 
+      max-height: 100%; 
+      object-fit: contain; 
+      animation: fadeIn 0.4s ease;
+    }
+
+    .canvas-slot-label {
+      position: absolute; top: 14px; left: 14px;
+      font-size: 10px; font-family: var(--font-mono);
+      background: rgba(0,0,0,0.6);
+      backdrop-filter: blur(8px);
+      padding: 6px 12px; 
+      border-radius: 6px; 
+      color: white;
+      font-weight: 800; 
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+    }
+
+    .placeholder-canvas {
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 12px; 
+      color: var(--text-muted);
+    }
+    .placeholder-canvas .ph-icon { 
+      font-size: 48px; 
+      opacity: 0.4;
+      animation: float 3s ease-in-out infinite;
+    }
+    .placeholder-canvas .ph-text { 
+      font-size: 14px; 
+      opacity: 0.6; 
+      font-weight: 600;
+      letter-spacing: -0.2px;
+    }
+
+    /* ── Loading spinner ───────────────────────────────────– */
+    .spinner {
+      width: 54px; height: 54px; border-radius: 50%;
+      border: 3px solid rgba(99,102,241,0.1);
+      border-top-color: var(--accent);
+      border-right-color: var(--accent);
+      animation: spin .9s linear infinite;
+      box-shadow: 0 0 20px rgba(99,102,241,0.15);
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .loading-text {
+      font-family: var(--font-mono); 
+      font-size: 12px;
+      color: var(--text-muted); 
+      text-align: center; 
+      margin-top: 16px;
+      animation: pulse 1.5s ease-in-out infinite;
+    }
+    @keyframes pulse { 0%, 100% { opacity: 0.6; } 50% { opacity: 1; } }
+
+    /* ── Right panel / RAG inspector ──────────────────────── */
+    .rag-panel { 
+      background: var(--surface);
+    }
+
+    .section { 
+      padding: 20px 24px; 
+      border-bottom: 1px solid var(--border); 
+    }
+    .section:last-child { border-bottom: none; }
+    .section-title {
+      font-size: 10px; 
+      font-weight: 800; 
+      letter-spacing: 0.9px;
+      text-transform: uppercase; 
+      color: var(--text-secondary); 
+      margin-bottom: 14px;
+      display: flex; 
+      align-items: center; 
+      gap: 10px;
+    }
+    .section-title .dot { width: 6px; height: 6px; border-radius: 50%; animation: pulse 2s ease-in-out infinite; }
+    .dot-accent  { background: var(--accent); }
+    .dot-green   { background: var(--success); }
+    .dot-orange  { background: var(--warn); }
+
+    /* Sub-task chips */
+    .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+    .chip {
+      padding: 6px 13px; 
+      border-radius: 8px;
+      font-size: 11px; 
+      font-weight: 700;
+      border: 1px solid; 
+      letter-spacing: 0.3px;
+      transition: var(--transition);
+      text-transform: uppercase;
+    }
+    .chip-remove  { 
+      background: #fee2e2; 
+      border-color: #fecaca; 
+      color: #dc2626;
+    }
+    .chip-remove:hover {
+      background: #fecaca;
+      border-color: #ef4444;
+    }
+    .chip-color   { 
+      background: #d1fae5; 
+      border-color: #6ee7b7; 
+      color: var(--success);
+    }
+    .chip-color:hover {
+      background: #a7f3d0;
+      border-color: var(--success);
+    }
+    .chip-lighting{ 
+      background: #fef3c7;  
+      border-color: #fcd34d;  
+      color: #92400e;
+    }
+    .chip-lighting:hover {
+      background: #fcd34d;
+      border-color: #f59e0b;
+    }
+    .chip-add     { 
+      background: #e0e7ff; 
+      border-color: #c7d2fe; 
+      color: var(--accent);
+    }
+    .chip-add:hover {
+      background: #c7d2fe;
+      border-color: var(--accent);
+    }
+    .chip-generic { 
+      background: #f3f4f6; 
+      border-color: #d1d5db; 
+      color: var(--text-secondary);
+    }
+    .chip-generic:hover {
+      background: #e5e7eb;
+      border-color: #9ca3af;
+    }
+
+    /* References */
+    .ref-card {
+      background: var(--surface-alt);
+      border-radius: var(--radius);
+      padding: 14px 16px; 
+      margin-bottom: 10px;
+      border: 1px solid var(--border);
+      transition: var(--transition);
+      cursor: pointer;
+    }
+    .ref-card:hover { 
+      background: #f0f3ff;
+      border-color: var(--accent);
+      box-shadow: 0 2px 8px rgba(99,102,241,0.1);
+    }
+    .ref-query { 
+      font-size: 10px; 
+      color: var(--text-muted); 
+      font-family: var(--font-mono); 
+      margin-bottom: 8px; 
+      letter-spacing: 0.3px;
+      text-transform: uppercase;
+    }
+    .ref-match { 
+      font-size: 12px; 
+      color: var(--text); 
+      line-height: 1.6; 
+      font-weight: 500;
+    }
+    .ref-score {
+      margin-top: 9px; 
+      font-size: 10px; 
+      font-family: var(--font-mono);
+      display: flex; 
+      align-items: center; 
+      gap: 10px;
+    }
+    .score-bar { 
+      flex: 1; 
+      height: 4px; 
+      background: var(--border); 
+      border-radius: 2px; 
+      overflow: hidden;
+    }
+    .score-fill { 
+      height: 100%; 
+      border-radius: 2px; 
+      background: var(--gradient-primary);
+    }
+
+    /* Enriched prompt */
+    .enriched-box {
+      background: var(--surface-alt);
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      padding: 14px 16px;
+      font-size: 12px; 
+      line-height: 1.7; 
+      color: var(--text);
+      font-family: var(--font-mono);
+      word-break: break-word;
+    }
+
+    /* State memory */
+    .state-row { 
+      display: flex; 
+      gap: 10px; 
+      align-items: flex-start; 
+      margin-bottom: 10px; 
+    }
+    .state-key {
+      font-size: 10px; 
+      font-family: var(--font-mono); 
+      color: var(--text-muted);
+      text-transform: uppercase; 
+      letter-spacing: 0.6px; 
+      min-width: 80px; 
+      padding-top: 3px;
+      font-weight: 800;
+    }
+    .state-vals { 
+      display: flex; 
+      flex-wrap: wrap; 
+      gap: 6px; 
+    }
+    .state-val {
+      font-size: 10px; 
+      padding: 5px 10px; 
+      border-radius: 6px;
+      background: #d1fae5; 
+      border: 1px solid #a7f3d0;
+      color: var(--success); 
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.2px;
+    }
+
+    /* Metrics */
+    .metric-grid { 
+      display: grid; 
+      grid-template-columns: 1fr 1fr; 
+      gap: 12px; 
+    }
+    .metric-card {
+      background: var(--surface-alt);
+      border-radius: var(--radius);
+      padding: 14px; 
+      border: 1px solid var(--border);
+      text-align: center; 
+      transition: var(--transition);
+      cursor: pointer;
+    }
+    .metric-card:hover { 
+      border-color: var(--accent);
+      background: #f0f3ff;
+      box-shadow: 0 2px 8px rgba(99,102,241,0.1);
+      transform: translateY(-2px);
+    }
+    .metric-val { 
+      font-size: 22px; 
+      font-weight: 800; 
+      font-family: var(--font-mono); 
+      color: var(--accent);
+    }
+    .metric-name { 
+      font-size: 10px; 
+      text-transform: uppercase; 
+      letter-spacing: 0.6px; 
+      color: var(--text-muted); 
+      margin-top: 6px; 
+      font-weight: 800;
+    }
+
+    /* History strip */
+    .history-strip {
+      padding: 16px 20px; 
+      border-top: 1px solid var(--border);
+      display: flex; 
+      gap: 10px; 
+      overflow-x: auto;
+      background: var(--surface-alt);
+    }
+    .history-thumb {
+      flex-shrink: 0; 
+      width: 64px; 
+      height: 64px;
+      border-radius: 10px; 
+      overflow: hidden;
+      border: 1px solid var(--border); 
+      cursor: pointer; 
+      transition: var(--transition);
+      position: relative;
+      box-shadow: 0 2px 4px rgba(0,0,0,.08);
+    }
+    .history-thumb:hover {
+      border-color: var(--accent);
+      box-shadow: 0 4px 12px rgba(99,102,241,0.15);
+      transform: scale(1.05);
+    }
+    .history-thumb img   { width: 100%; height: 100%; object-fit: cover; }
+    .history-thumb .h-step {
+      position: absolute; bottom: 0; left: 0; right: 0;
+      background: rgba(0,0,0,0.6);
+      font-size: 9px; font-family: var(--font-mono);
+      text-align: center; padding: 8px 4px 4px; color: white; font-weight: 800;
+      letter-spacing: 0.3px;
+    }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 8px; height: 8px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { 
+      background: var(--border);
+      border-radius: 4px; 
+      transition: var(--transition);
+    }
+    ::-webkit-scrollbar-thumb:hover { 
+      background: var(--accent);
+    }
+
+    /* Animations */
+    @keyframes fadeIn { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:none; } }
+    .fade-in { animation: fadeIn .3s ease forwards; }
+
+    /* Responsive */
+    @media (max-width: 1100px) {
+      .main { grid-template-columns: 340px 1fr; }
+      .rag-panel { display: none; }
+    }
+    @media (max-width: 720px) {
+      .main { grid-template-columns: 1fr; }
+      .panel { border: 1px solid var(--border); border-radius: var(--radius); }
+    }
+  </style>
+</head>
+<body>
+<div class="app">
+
+  <!-- ── Header ── -->
+  <header>
+    <div class="logo">✦</div>
+    <div>
+      <div class="header-title">RAG Image Editor</div>
+      <div class="header-sub">Prompt-Decomposed Retrieval-Augmented Image Editing</div>
+    </div>
+    <div class="badge" id="serverStatus">● CONNECTING</div>
+  </header>
+
+  <div class="main">
+
+    <!-- ──────────────────────────────────────────
+         LEFT PANEL — Controls
+    ─────────────────────────────────────────── -->
+    <div class="panel" style="background: var(--surface);">
+      <div class="panel-header">
+        <span style="font-size:16px;">⚙️</span>
+        <span class="panel-title">Input & Controls</span>
+      </div>
+      <div class="panel-body">
+
+        <!-- Upload -->
+        <div>
+          <label class="field-label">Source Image</label>
+          <div class="upload-zone" id="dropZone" onclick="document.getElementById('fileInput').click()">
+            <img id="previewImg" style="display:none" />
+            <div class="upload-placeholder" id="uploadPlaceholder">
+              <div class="upload-icon">⬆</div>
+              <div class="upload-label">Drop image or click to upload</div>
+              <div class="upload-sub">PNG, JPG, WEBP — up to 10 MB</div>
+            </div>
+          </div>
+          <input type="file" id="fileInput" accept="image/*" />
+        </div>
+
+        <!-- Prompt -->
+        <div>
+          <label class="field-label" for="promptInput">Editing Instruction</label>
+          <textarea class="prompt-input" id="promptInput"
+            placeholder='e.g. "Remove the car and make the sky sunset, keep mountains intact"'></textarea>
+        </div>
+
+        <!-- Example prompts -->
+        <div>
+          <label class="field-label">Quick Start</label>
+          <div style="display:flex; flex-wrap:wrap; gap:6px;">
+            <button class="btn-secondary" onclick="setPrompt('Remove the car and make the sky sunset')">🌅 Sunset</button>
+            <button class="btn-secondary" onclick="setPrompt('Change the car color to blue')">🔵 Blue</button>
+            <button class="btn-secondary" onclick="setPrompt('Add snow on the ground, keep buildings')">❄️ Snow</button>
+            <button class="btn-secondary" onclick="setPrompt('Make it night time')">🌙 Night</button>
+          </div>
+        </div>
+
+        <!-- RAG toggle -->
+        <div style="padding: 14px 16px; background: linear-gradient(135deg, rgba(31,29,53,0.4), rgba(23,21,43,0.3)); border-radius: var(--radius); border: 1px solid var(--border);">
+          <div class="toggle-row">
+            <label class="toggle">
+              <input type="checkbox" id="ragToggle" checked />
+              <div class="toggle-track"></div>
+              <div class="toggle-thumb"></div>
+            </label>
+            <div>
+              <div class="toggle-label">RAG Retrieval</div>
+              <div class="toggle-sub">Retrieve context from knowledge base</div>
+            </div>
+          </div>
+        </div>
+
+        <div style="padding: 14px 16px; background: var(--surface-alt); border-radius: var(--radius); border: 1px solid var(--border);">
+          <div class="toggle-row">
+            <label class="toggle">
+              <input type="checkbox" id="audioToggle" />
+              <div class="toggle-track"></div>
+              <div class="toggle-thumb"></div>
+            </label>
+            <div>
+              <div class="toggle-label">Optional Music</div>
+              <div class="toggle-sub">Pick one local instrumental track after image generation</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Sliders -->
+        <div>
+          <label class="field-label">Image Guidance Scale
+            <span style="color:var(--text);font-family:var(--font-mono);font-weight:400"> — structural fidelity</span>
+          </label>
+          <div class="slider-row">
+            <input type="range" id="imgGuidance" min="1" max="3" step="0.1" value="1.5" oninput="document.getElementById('imgGuidanceVal').textContent=this.value" />
+            <span class="slider-val" id="imgGuidanceVal">1.5</span>
+          </div>
+        </div>
+
+        <div>
+          <label class="field-label">Text Guidance Scale
+            <span style="color:var(--text);font-family:var(--font-mono);font-weight:400"> — instruction strength</span>
+          </label>
+          <div class="slider-row">
+            <input type="range" id="txtGuidance" min="4" max="14" step="0.5" value="7.5" oninput="document.getElementById('txtGuidanceVal').textContent=this.value" />
+            <span class="slider-val" id="txtGuidanceVal">7.5</span>
+          </div>
+        </div>
+
+        <div>
+          <label class="field-label">Inference Steps</label>
+          <div class="slider-row">
+            <input type="range" id="numSteps" min="10" max="50" step="5" value="30" oninput="document.getElementById('numStepsVal').textContent=this.value" />
+            <span class="slider-val" id="numStepsVal">30</span>
+          </div>
+        </div>
+
+        <!-- CTA -->
+        <button class="btn-edit" id="editBtn" onclick="runEdit()" disabled>
+          <span id="editBtnIcon">✦</span>
+          <span id="editBtnText">Apply Edit</span>
+        </button>
+
+        <!-- Reset memory -->
+        <button class="btn-secondary" onclick="resetMemory()" style="font-size:12px;color:var(--text-secondary);width:100%;">
+          ↻ Reset state
+        </button>
+
+      </div>
+    </div>
+
+    <!-- ──────────────────────────────────────────
+         CENTRE — Canvas
+    ─────────────────────────────────────────── -->
+    <div class="panel canvas-panel">
+
+      <div class="canvas-toolbar">
+        <button class="tool-btn active" id="tabSideBySide" onclick="setView('side')">Side by Side</button>
+        <button class="tool-btn" id="tabBefore"     onclick="setView('before')">Before</button>
+        <button class="tool-btn" id="tabAfter"      onclick="setView('after')">After</button>
+        <div style="flex:1;"></div>
+        <button class="btn-edit" id="downloadBtn" onclick="downloadResult()" style="display:none;padding: 10px 18px;width:auto;background: linear-gradient(135deg, #10b981, #34d399);">⬇ Save</button>
+      </div>
+
+      <div class="canvas-stage" id="canvasStage">
+        <!-- Before slot -->
+        <div class="canvas-slot" id="beforeSlot">
+          <div class="canvas-slot-label">ORIGINAL</div>
+          <div class="placeholder-canvas" id="beforePlaceholder">
+            <div class="ph-icon">🖼</div>
+            <div class="ph-text">Upload an image to begin</div>
+          </div>
+          <img id="canvasBefore" style="display:none" />
+        </div>
+        <!-- After slot -->
+        <div class="canvas-slot" id="afterSlot">
+          <div class="canvas-slot-label">EDITED</div>
+          <div class="placeholder-canvas" id="afterPlaceholder">
+            <div class="ph-icon">✨</div>
+            <div class="ph-text">Result will appear here</div>
+          </div>
+          <div class="placeholder-canvas" id="loadingState" style="display:none;">
+            <div class="spinner pulsing"></div>
+            <div class="loading-text" id="loadingMsg">Running pipeline…</div>
+          </div>
+          <img id="canvasAfter" style="display:none" />
+        </div>
+      </div>
+
+      <!-- History strip -->
+      <div class="history-strip" id="historyStrip">
+        <span style="font-size:11px;color:var(--muted);display:flex;align-items:center;margin-right:4px;">History:</span>
+      </div>
+
+      <div id="audioPanel" style="display:none; margin: 0 24px 24px; padding: 16px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface);">
+        <div style="font-size: 11px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; color: var(--text-muted); margin-bottom: 10px;">
+          Selected Audio
+        </div>
+        <div id="audioMeta" style="font-size: 13px; color: var(--text-secondary); margin-bottom: 10px;"></div>
+        <audio id="audioPlayer" controls preload="none" style="width:100%;"></audio>
+      </div>
+
+    </div>
+
+    <!-- ──────────────────────────────────────────
+         RIGHT PANEL — RAG Inspector
+    ─────────────────────────────────────────── -->
+    <div class="panel rag-panel">
+      <div class="panel-header">
+        <span style="font-size:16px;">📋</span>
+        <span class="panel-title">Details</span>
+      </div>
+
+      <!-- Sub-tasks -->
+      <div class="section" id="sectionDecomposed">
+        <div class="section-title"><div class="dot dot-accent"></div>Decomposed Sub-Tasks</div>
+        <div class="chips" id="chipContainer">
+          <span style="font-size:12px;color:var(--muted);">Awaiting instruction…</span>
+        </div>
+      </div>
+
+      <!-- Preserve hints -->
+      <div class="section" id="sectionPreserve">
+        <div class="section-title"><div class="dot dot-green"></div>Preserve Constraints</div>
+        <div class="chips" id="preserveChips"></div>
+      </div>
+
+      <!-- Enriched prompt -->
+      <div class="section" id="sectionPrompt">
+        <div class="section-title"><div class="dot dot-orange"></div>Enriched Prompt (sent to model)</div>
+        <div class="enriched-box" id="enrichedPromptBox"></div>
+      </div>
+
+      <!-- Retrieved references -->
+      <div class="section" id="sectionRefs">
+        <div class="section-title"><div class="dot dot-accent"></div>Retrieved References (RAG)</div>
+        <div id="refsContainer"></div>
+      </div>
+
+      <!-- Edit state memory -->
+      <div class="section" id="sectionState">
+        <div class="section-title"><div class="dot dot-green"></div>Edit State Memory</div>
+        <div id="stateContainer"></div>
+      </div>
+
+      <!-- CLIP metrics -->
+      <div class="section" id="sectionMetrics">
+        <div class="section-title"><div class="dot dot-orange"></div>CLIP Metrics</div>
+        <div class="metric-grid" id="metricsGrid"></div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- ── JavaScript ─────────────────────────────────────── -->
+<script>
+const API = "http://localhost:8000";
+let uploadedB64 = null;
+let currentEdited = null;
+let editHistory   = [];
+let viewMode = "side";
+
+// ── File upload ─────────────────────────────────────────
+const fileInput = document.getElementById("fileInput");
+const dropZone  = document.getElementById("dropZone");
+const previewImg = document.getElementById("previewImg");
+const uploadPlaceholder = document.getElementById("uploadPlaceholder");
+const audioToggle = document.getElementById("audioToggle");
+
+fileInput.addEventListener("change", e => handleFile(e.target.files[0]));
+dropZone.addEventListener("dragover", e => { e.preventDefault(); dropZone.classList.add("dragover"); });
+dropZone.addEventListener("dragleave", () => dropZone.classList.remove("dragover"));
+dropZone.addEventListener("drop", e => {
+  e.preventDefault(); dropZone.classList.remove("dragover");
+  if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]);
+});
+audioToggle.addEventListener("change", () => {
+  if (!audioToggle.checked) {
+    renderSelectedTrack(null);
+    return;
+  }
+  if (currentEdited) {
+    selectAudioForCurrentResult();
+  }
+});
+
+function handleFile(file) {
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    const b64full = ev.target.result;            // data:image/...;base64,...
+    uploadedB64   = b64full.split(",")[1];       // raw base64
+
+    previewImg.src = b64full;
+    previewImg.style.display = "block";
+    uploadPlaceholder.style.display = "none";
+    dropZone.classList.add("has-image");
+
+    // Mirror to canvas before slot
+    const cb = document.getElementById("canvasBefore");
+    cb.src   = b64full;
+    cb.style.display = "block";
+    document.getElementById("beforePlaceholder").style.display = "none";
+
+    document.getElementById("editBtn").disabled = false;
+  };
+  reader.readAsDataURL(file);
+}
+
+// ── Prompt preview (decompose on type) ──────────────────
+let decompTimer;
+document.getElementById("promptInput").addEventListener("input", () => {
+  clearTimeout(decompTimer);
+  decompTimer = setTimeout(() => previewDecompose(), 600);
+});
+
+async function previewDecompose() {
+  const prompt = document.getElementById("promptInput").value.trim();
+  if (!prompt) return;
+  try {
+    const res  = await fetch(`${API}/decompose`, {
+      method: "POST", headers: {"Content-Type":"application/json"},
+      body: JSON.stringify({ instruction: prompt })
+    });
+    if (!res.ok) return;
+    const data = await res.json();
+    renderSubTasks(data.sub_tasks, data.edit_types);
+    renderPreserve(data.preserve_hints || []);
+  } catch (_) { /* server might not be up yet */ }
+}
+
+// ── Run edit ─────────────────────────────────────────────
+async function runEdit() {
+  if (!uploadedB64) return;
+  const prompt = document.getElementById("promptInput").value.trim();
+  if (!prompt)   { alert("Please enter an instruction."); return; }
+
+  setLoading(true);
+
+  const payload = {
+    image_b64:            uploadedB64,
+    instruction:          prompt,
+    image_guidance_scale: parseFloat(document.getElementById("imgGuidance").value),
+    text_guidance_scale:  parseFloat(document.getElementById("txtGuidance").value),
+    num_steps:            parseInt(document.getElementById("numSteps").value),
+    use_rag:              document.getElementById("ragToggle").checked,
+    include_audio:        document.getElementById("audioToggle").checked,
+  };
+
+  const msgs = [
+    "Decomposing prompt…",
+    "Retrieving MagicBrush references…",
+    "Building enriched prompt…",
+    "Running InstructPix2Pix…",
+    "Applying edits…",
+  ];
+  let mi = 0;
+  const msgTimer = setInterval(() => {
+    document.getElementById("loadingMsg").textContent = msgs[mi++ % msgs.length];
+  }, 2500);
+
+  try {
+    const res  = await fetch(`${API}/edit`, {
+      method: "POST", headers: {"Content-Type":"application/json"},
+      body: JSON.stringify(payload)
+    });
+    clearInterval(msgTimer);
+
+    if (!res.ok) {
+      const err = await res.json();
+      alert("Error: " + (err.detail || "Unknown error"));
+      setLoading(false); return;
+    }
+
+    const data = await res.json();
+    currentEdited = data.edited_image_b64;
+
+    // Show result
+    const ca   = document.getElementById("canvasAfter");
+    ca.src     = "data:image/jpeg;base64," + currentEdited;
+    ca.style.display = "block";
+    document.getElementById("afterPlaceholder").style.display = "none";
+    document.getElementById("downloadBtn").style.display = "inline-flex";
+
+    // Add to history
+    addHistory(currentEdited, editHistory.length + 1);
+
+    // Update inspector
+    renderSubTasks(data.decomposed_sub_tasks, []);
+    renderPreserve(data.preserve_hints || []);
+    renderEnrichedPrompt(data.enriched_prompt);
+    renderRefs(data.retrieved_references || {});
+    renderState(data.edit_state || {});
+    computeAndRenderMetrics(data);
+    renderSelectedTrack(data.selected_track || null);
+
+    // Update image guidance for next step — use current edited as new input
+    uploadedB64 = currentEdited;
+    const pre   = document.getElementById("previewImg");
+    pre.src     = "data:image/jpeg;base64," + currentEdited;
+
+  } catch (err) {
+    clearInterval(msgTimer);
+    alert("Request failed — is the backend running on port 8000?\n\n" + err.message);
+  }
+
+  setLoading(false);
+}
+
+// ── Loading state ─────────────────────────────────────────
+function setLoading(on) {
+  document.getElementById("loadingState").style.display = on ? "flex" : "none";
+  document.getElementById("afterPlaceholder").style.display  = (on || currentEdited) ? "none" : "flex";
+  const ca = document.getElementById("canvasAfter");
+  if (on) ca.style.display = "none";
+  document.getElementById("editBtn").disabled = on || !uploadedB64;
+  document.getElementById("editBtnIcon").textContent = on ? "⏳" : "✦";
+  document.getElementById("editBtnText").textContent = on ? "Editing…" : "Apply Edit";
+}
+
+// ── View modes ────────────────────────────────────────────
+function setView(mode) {
+  viewMode = mode;
+  ["tabSideBySide","tabBefore","tabAfter"].forEach(id =>
+    document.getElementById(id).classList.remove("active")
+  );
+  const before = document.getElementById("beforeSlot");
+  const after  = document.getElementById("afterSlot");
+  if (mode === "side")   { before.style.display = "flex"; after.style.display  = "flex"; document.getElementById("tabSideBySide").classList.add("active"); }
+  if (mode === "before") { before.style.display = "flex"; after.style.display  = "none"; document.getElementById("tabBefore").classList.add("active"); }
+  if (mode === "after")  { before.style.display = "none"; after.style.display  = "flex"; document.getElementById("tabAfter").classList.add("active"); }
+}
+
+// ── Download ──────────────────────────────────────────────
+function downloadResult() {
+  if (!currentEdited) return;
+  const a   = document.createElement("a");
+  a.href    = "data:image/jpeg;base64," + currentEdited;
+  a.download = `rag_edit_${Date.now()}.jpg`;
+  a.click();
+}
+
+// ── History ──────────────────────────────────────────────
+function addHistory(b64, step) {
+  const strip = document.getElementById("historyStrip");
+  strip.style.display = "flex";
+
+  const thumb = document.createElement("div");
+  thumb.className = "history-thumb fade-in";
+  thumb.innerHTML = `<img src="data:image/jpeg;base64,${b64}" /><div class="h-step">S${step}</div>`;
+  thumb.onclick   = () => {
+    // Load this step as the new source image for next edit (branching)
+    // Only update source preview, don't touch the canvas
+    uploadedB64 = b64;
+    
+    // Update source preview on left
+    const pre = document.getElementById("previewImg");
+    pre.src   = "data:image/jpeg;base64," + b64;
+    pre.style.display = "block";
+    document.getElementById("uploadPlaceholder").style.display = "none";
+    document.getElementById("dropZone").classList.add("has-image");
+  };
+  strip.appendChild(thumb);
+}
+
+function renderSelectedTrack(track) {
+  const panel = document.getElementById("audioPanel");
+  const meta = document.getElementById("audioMeta");
+  const player = document.getElementById("audioPlayer");
+
+  if (!track) {
+    player.pause();
+    player.removeAttribute("src");
+    player.load();
+    panel.style.display = "none";
+    meta.textContent = "";
+    return;
+  }
+
+  const details = [
+    track.title || "Selected track",
+    track.genre || null,
+    track.reason || null,
+  ].filter(Boolean);
+
+  meta.textContent = details.join(" • ");
+  player.src = `${API}${track.file_url}`;
+  panel.style.display = "block";
+}
+
+async function selectAudioForCurrentResult() {
+  const prompt = document.getElementById("promptInput").value.trim();
+  if (!prompt) {
+    alert("Please enter an instruction before selecting music.");
+    audioToggle.checked = false;
+    return;
+  }
+
+  try {
+    const res = await fetch(`${API}/select-audio`, {
+      method: "POST",
+      headers: {"Content-Type":"application/json"},
+      body: JSON.stringify({ instruction: prompt })
+    });
+
+    if (!res.ok) {
+      const err = await res.json();
+      alert("Audio selection failed: " + (err.detail || "Unknown error"));
+      return;
+    }
+
+    const track = await res.json();
+    renderSelectedTrack(track || null);
+  } catch (err) {
+    alert("Audio selection failed — is the backend running on port 8000?\n\n" + err.message);
+  }
+}
+
+// ── RAG Inspector renders ─────────────────────────────────
+const typeColorMap = {
+  remove: "chip-remove", color_change: "chip-color",
+  lighting: "chip-lighting", add: "chip-add", generic: "chip-generic"
+};
+
+function renderSubTasks(tasks, types) {
+  const c = document.getElementById("chipContainer");
+  c.innerHTML = "";
+  tasks.forEach((t, i) => {
+    const cls = typeColorMap[types[i]] || "chip-generic";
+    const ch  = document.createElement("span");
+    ch.className = `chip ${cls} fade-in`;
+    ch.textContent = t;
+    c.appendChild(ch);
+  });
+}
+
+function renderPreserve(hints) {
+  const sec = document.getElementById("sectionPreserve");
+  if (!hints.length) { sec.style.display = "none"; return; }
+  sec.style.display = "block";
+  const c = document.getElementById("preserveChips");
+  c.innerHTML = hints.map(h => `<span class="chip chip-color fade-in">🔒 ${h}</span>`).join("");
+}
+
+function renderEnrichedPrompt(prompt) {
+  document.getElementById("sectionPrompt").style.display = "block";
+  document.getElementById("enrichedPromptBox").textContent = prompt;
+}
+
+function renderRefs(refs) {
+  const sec = document.getElementById("sectionRefs");
+  const con = document.getElementById("refsContainer");
+  const entries = Object.entries(refs);
+  if (!entries.length) { sec.style.display = "none"; return; }
+  sec.style.display = "block";
+  con.innerHTML = "";
+  entries.forEach(([query, list]) => {
+    if (!list.length) return;
+    const top = list[0];
+    const pct = Math.round((top.similarity + 1) / 2 * 100);
+    con.innerHTML += `
+      <div class="ref-card fade-in">
+        <div class="ref-query">Query: "${query}"</div>
+        <div class="ref-match">${top.instruction}</div>
+        <div class="ref-score">
+          <span style="color:var(--muted)">${top.similarity.toFixed(3)}</span>
+          <div class="score-bar"><div class="score-fill" style="width:${pct}%"></div></div>
+        </div>
+      </div>`;
+  });
+}
+
+function renderState(state) {
+  const sec = document.getElementById("sectionState");
+  const con = document.getElementById("stateContainer");
+  if (!state.step) { sec.style.display = "none"; return; }
+  sec.style.display = "block";
+
+  const rows = [
+    { key: "Removed",   vals: state.removed   || [] },
+    { key: "Added",     vals: state.added     || [] },
+    { key: "Preserved", vals: state.preserved || [] },
+    { key: "History",   vals: state.history   || [] },
+  ];
+
+  con.innerHTML = rows.filter(r => r.vals.length).map(r => `
+    <div class="state-row">
+      <span class="state-key">${r.key}</span>
+      <div class="state-vals">
+        ${r.vals.map(v => `<span class="state-val">${v}</span>`).join("")}
+      </div>
+    </div>`
+  ).join("");
+}
+
+function computeAndRenderMetrics(data) {
+  const sec  = document.getElementById("sectionMetrics");
+  const grid = document.getElementById("metricsGrid");
+  // Show placeholder metrics (real ones computed server-side via metrics.py)
+  // We display CLIP similarity if available from response
+  sec.style.display = "block";
+  const subtasks = (data.decomposed_sub_tasks || []).length;
+  const refs = Object.values(data.retrieved_references || {}).flat().length;
+  const avgSim = refs > 0
+    ? (Object.values(data.retrieved_references || {}).flat()
+        .reduce((a,b) => a + (b.similarity||0), 0) / refs).toFixed(3)
+    : "—";
+
+  grid.innerHTML = `
+    <div class="metric-card"><div class="metric-val">${subtasks}</div><div class="metric-name">Sub-Tasks</div></div>
+    <div class="metric-card"><div class="metric-val">${refs}</div><div class="metric-name">Refs Retrieved</div></div>
+    <div class="metric-card"><div class="metric-val">${avgSim}</div><div class="metric-name">Avg Sim</div></div>
+    <div class="metric-card"><div class="metric-val">${data.edit_state?.step || 1}</div><div class="metric-name">Edit Step</div></div>
+  `;
+}
+
+// ── Reset memory ──────────────────────────────────────────
+async function resetMemory() {
+  try {
+    await fetch(`${API}/reset`, { method: "POST", headers: {"Content-Type":"application/json"}, body: "{}" });
+  } catch (_) {}
+  editHistory = [];
+  document.getElementById("historyStrip").style.display = "none";
+  document.getElementById("historyStrip").innerHTML =
+    '<span style="font-size:11px;color:var(--muted);display:flex;align-items:center;margin-right:4px;">History:</span>';
+  document.getElementById("sectionState").style.display = "none";
+  alert("Edit state memory reset ✓");
+}
+
+// ── Quick prompt ──────────────────────────────────────────
+function setPrompt(p) {
+  document.getElementById("promptInput").value = p;
+  previewDecompose();
+}
+
+// ── Server health check ───────────────────────────────────
+async function checkServer() {
+  const badge = document.getElementById("serverStatus");
+  try {
+    const res = await fetch(`${API}/health`, { signal: AbortSignal.timeout(3000) });
+    if (res.ok) {
+      badge.textContent = "● CONNECTED";
+      badge.style.color = "var(--success)";
+      badge.style.borderColor = "rgba(99,255,218,.3)";
+      badge.style.background  = "rgba(99,255,218,.08)";
+      return;
+    }
+  } catch (_) {}
+  badge.textContent = "● BACKEND OFFLINE";
+  badge.style.color = "var(--accent2)";
+  badge.style.borderColor = "rgba(255,107,107,.3)";
+  badge.style.background  = "rgba(255,107,107,.08)";
+}
+
+checkServer();
+setInterval(checkServer, 8000);
+</script>
+
+</body>
+</html>

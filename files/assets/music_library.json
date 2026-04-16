@@ -1,0 +1,146 @@
+[
+  {
+    "id": "track_01",
+    "title": "Night Walk in Paris",
+    "file": "trimmed_alban_gogh-night-walk-in-paris-143712.mp3",
+    "duration_sec": 20,
+    "genre": "ambient",
+    "mood": ["calm", "night", "urban"],
+    "tags": ["night", "city", "urban", "moody", "paris"]
+  },
+  {
+    "id": "track_02",
+    "title": "Ambient Atmosphere",
+    "file": "trimmed_atlasaudio-ambient-atmosphere-511882.mp3",
+    "duration_sec": 20,
+    "genre": "ambient",
+    "mood": ["calm", "soft", "dreamy"],
+    "tags": ["ambient", "atmosphere", "calm", "soft", "background"]
+  },
+  {
+    "id": "track_03",
+    "title": "Aesthetic Sunset",
+    "file": "trimmed_clavier-music-aesthetic-sunset-342199.mp3",
+    "duration_sec": 20,
+    "genre": "ambient",
+    "mood": ["dreamy", "warm", "calm"],
+    "tags": ["sunset", "warm", "aesthetic", "soft", "cinematic"]
+  },
+  {
+    "id": "track_04",
+    "title": "Chillhop Night Drive",
+    "file": "trimmed_desifreemusic-chillhop-night-drive-moody-lofi-groove-451182.mp3",
+    "duration_sec": 20,
+    "genre": "lofi",
+    "mood": ["moody", "night", "urban"],
+    "tags": ["night", "drive", "lofi", "chill", "city", "moody"]
+  },
+  {
+    "id": "track_05",
+    "title": "Space Ambient",
+    "file": "trimmed_freemusicforvideo-space-ambient-495614.mp3",
+    "duration_sec": 20,
+    "genre": "ambient",
+    "mood": ["dreamy", "calm", "wide"],
+    "tags": ["space", "ambient", "cinematic", "airy", "background"]
+  },
+  {
+    "id": "track_06",
+    "title": "Sad Piano",
+    "file": "trimmed_leberch-sad-piano-501483.mp3",
+    "duration_sec": 20,
+    "genre": "piano",
+    "mood": ["sad", "soft", "slow"],
+    "tags": ["sad", "piano", "emotional", "soft", "gentle"]
+  },
+  {
+    "id": "track_07",
+    "title": "Cold Cinematic Landscape",
+    "file": "trimmed_lexin_music-cold-cinematic-landscape-116954.mp3",
+    "duration_sec": 20,
+    "genre": "cinematic",
+    "mood": ["cold", "dramatic", "wide"],
+    "tags": ["cold", "cinematic", "landscape", "mountain", "epic"]
+  },
+  {
+    "id": "track_08",
+    "title": "Calm Space Night Atmosphere",
+    "file": "trimmed_low_atmos-low-atmos-calm-space-night-atmosphere-514711.mp3",
+    "duration_sec": 20,
+    "genre": "ambient",
+    "mood": ["calm", "night", "soft"],
+    "tags": ["calm", "space", "night", "ambient", "sleep"]
+  },
+  {
+    "id": "track_09",
+    "title": "Space Sleep Atmosphere",
+    "file": "trimmed_low_atmos-low-atmos-space-sleep-atmosphere-514715.mp3",
+    "duration_sec": 20,
+    "genre": "ambient",
+    "mood": ["calm", "sleep", "soft"],
+    "tags": ["space", "sleep", "ambient", "soft", "background"]
+  },
+  {
+    "id": "track_10",
+    "title": "Lofi Chill",
+    "file": "trimmed_mondamusic-lofi-chill-chill-512854.mp3",
+    "duration_sec": 20,
+    "genre": "lofi",
+    "mood": ["chill", "calm", "light"],
+    "tags": ["lofi", "chill", "relax", "soft", "background"]
+  },
+  {
+    "id": "track_11",
+    "title": "Epic Cinematic 2",
+    "file": "trimmed_nastelbom-epic-cinematic-2-513436.mp3",
+    "duration_sec": 20,
+    "genre": "cinematic",
+    "mood": ["epic", "dramatic", "uplifting"],
+    "tags": ["epic", "cinematic", "dramatic", "powerful", "trailer"]
+  },
+  {
+    "id": "track_12",
+    "title": "Ambient Forest Rain",
+    "file": "trimmed_nourishedbymusic-ambient-forest-rain-375365.mp3",
+    "duration_sec": 20,
+    "genre": "ambient",
+    "mood": ["calm", "nature", "soft"],
+    "tags": ["forest", "rain", "nature", "ambient", "peaceful"]
+  },
+  {
+    "id": "track_13",
+    "title": "Sad Music",
+    "file": "trimmed_paulyudin-sad-sad-music-508961.mp3",
+    "duration_sec": 20,
+    "genre": "piano",
+    "mood": ["sad", "slow", "emotional"],
+    "tags": ["sad", "emotional", "soft", "melancholic", "dramatic"]
+  },
+  {
+    "id": "track_14",
+    "title": "Cinematic Cold Foreboding",
+    "file": "trimmed_senormusica81-cinematic-cold-foreboding-2026-v2-1-465060.mp3",
+    "duration_sec": 20,
+    "genre": "cinematic",
+    "mood": ["dark", "cold", "dramatic"],
+    "tags": ["cinematic", "cold", "dark", "foreboding", "moody"]
+  },
+  {
+    "id": "track_15",
+    "title": "Upbeat Background Music",
+    "file": "trimmed_sigmamusicart-upbeat-background-music-514577.mp3",
+    "duration_sec": 20,
+    "genre": "corporate",
+    "mood": ["happy", "bright", "uplifting"],
+    "tags": ["upbeat", "happy", "bright", "background", "energetic"]
+  },
+  {
+    "id": "track_16",
+    "title": "Dreamy Ambient",
+    "file": "trimmed_tunetank-dreamy-ambient-347935.mp3",
+    "duration_sec": 20,
+    "genre": "ambient",
+    "mood": ["dreamy", "soft", "calm"],
+    "tags": ["dreamy", "ambient", "soft", "magic", "cinematic"]
+  }
+]

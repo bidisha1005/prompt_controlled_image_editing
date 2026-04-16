@@ -1,0 +1,35 @@
+
+# Core ML
+torch>=2.0.0
+torchvision>=0.15.0
+transformers>=4.38.0
+diffusers>=0.27.0
+accelerate>=0.27.0
+safetensors>=0.4.0
+xformers; platform_system == "Linux"
+
+# RAG / Vector DB
+faiss-cpu>=1.7.4
+# faiss-gpu>=1.7.4   # Uncomment if using GPU FAISS
+rank-bm25>=0.2.2  # Keyword-based retrieval for hybrid search
+
+# Dataset
+datasets>=2.18.0
+huggingface-hub>=0.21.0
+
+# Server
+fastapi>=0.110.0
+uvicorn[standard]>=0.29.0
+pydantic>=2.0.0
+python-multipart>=0.0.9
+groq>=0.11.0
+
+# Image processing
+Pillow>=10.0.0
+numpy>=1.24.0
+
+# Evaluation
+scipy>=1.11.0
+
+# Misc
+tqdm>=4.66.0
