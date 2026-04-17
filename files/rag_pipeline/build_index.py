@@ -5,6 +5,9 @@ Run this once before starting the server.
 """
 
 import os
+# Fix OpenMP duplicate initialization on macOS
+os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
+
 import gc
 import json
 import pickle
@@ -65,6 +68,23 @@ class CLIPEmbedder:
         gc.collect()
         logger.info("CLIP ready!")
 
+    def _extract_text_features(self, outputs) -> torch.Tensor:
+        """
+        Handle CLIP output shape differences across transformers versions.
+        Prefer the projected CLIP embedding, then fall back to pooled output.
+        """
+        if isinstance(outputs, torch.Tensor):
+            return outputs
+        if hasattr(outputs, "text_embeds") and outputs.text_embeds is not None:
+            return outputs.text_embeds
+        if hasattr(outputs, "pooler_output") and outputs.pooler_output is not None:
+            return outputs.pooler_output
+        if isinstance(outputs, tuple) and outputs:
+            return outputs[0]
+        raise TypeError(
+            f"Unsupported CLIP text output type: {type(outputs).__name__}"
+        )
+
     @torch.no_grad()
     def embed_text(self, texts: List[str]) -> np.ndarray:
         inputs = self.processor(
@@ -73,24 +93,20 @@ class CLIPEmbedder:
             padding=True,
             truncation=True,
             max_length=77,
-        )
-        feats = self.model.get_text_features(**inputs)
+        ).to(self.device)
 
-        if isinstance(feats, torch.Tensor):
-            emb = feats
-        elif hasattr(feats, "text_embeds") and feats.text_embeds is not None:
-            emb = feats.text_embeds
-        elif hasattr(feats, "pooler_output") and feats.pooler_output is not None:
-            emb = feats.pooler_output
-        elif hasattr(feats, "last_hidden_state") and feats.last_hidden_state is not None:
-            emb = feats.last_hidden_state[:, 0, :]
-        else:
-            raise RuntimeError(
-                f"Unexpected CLIP text feature output type: {type(feats).__name__}"
-            )
+        # Only pass text keys into the text tower. Calling the full CLIP model
+        # forward path can require `pixel_values` on some transformers versions.
+        text_inputs = {
+            key: value
+            for key, value in inputs.items()
+            if key in {"input_ids", "attention_mask", "position_ids"}
+        }
 
-        emb = emb / emb.norm(dim=-1, keepdim=True).clamp_min(1e-12)
-        return emb.detach().cpu().numpy()
+        outputs = self.model.get_text_features(**text_inputs)
+        feats = self._extract_text_features(outputs)
+        feats = feats / feats.norm(dim=-1, keepdim=True)
+        return feats.detach().numpy()
 
 
 # ─────────────────────────────────────────────
@@ -197,7 +213,7 @@ class RAGRetriever:
 
     def retrieve(self, query: str, k: int = 3, hybrid_weight: float = 0.6) -> List[Dict]:
         """
-        Hybrid retrieval: blend semantic (FAISS) + keyword (BM25) scores.
+        Enhanced hybrid retrieval with query expansion and polarity-aware re-ranking.
         
         Args:
             query: Search string
@@ -205,56 +221,95 @@ class RAGRetriever:
             hybrid_weight: Weight for semantic [0-1], keyword gets (1-hybrid_weight)
         
         Returns:
-            Top-k results with fused scores
+            Top-k results with fused scores, polarity-matched
         """
-        # ── Semantic retrieval (FAISS) ──
-        emb = self.embedder.embed_text([query]).astype("float32")
-        scores_semantic, ids = self.index.search(emb, min(k * 3, len(self.metadata)))  # Retrieve 3x for fusion
+        from rag_pipeline.prompt_decomposer import (
+            DecomposedPrompt,
+            EditTask,
+            QueryExpander,
+            RAGRetrieverScorer,
+        )
         
-        semantic_results = {}
-        for score, idx in zip(scores_semantic[0], ids[0]):
-            if idx >= 0:
-                semantic_results[idx] = float(score)
+        # ── Step 1: Query expansion with attributes ──
+        expanded_queries = QueryExpander.expand(query, num_expansions=2)
+        logger.debug(f"Query expanded: {expanded_queries}")
         
-        # ── Keyword retrieval (BM25) ──
-        keyword_results = {}
+        # ── Step 2: Aggregate results from all expansions ──
+        all_results = {}  # idx -> result dict
+        
+        for expanded_query in expanded_queries:
+            # Semantic retrieval (FAISS)
+            emb = self.embedder.embed_text([expanded_query]).astype("float32")
+            scores_semantic, ids = self.index.search(emb, min(k * 5, len(self.metadata)))  # 5x for aggressive re-ranking
+            
+            for score, idx in zip(scores_semantic[0], ids[0]):
+                if idx >= 0:
+                    if idx not in all_results:
+                        all_results[idx] = {
+                            "semantic_scores": [],
+                            "keyword_scores": [],
+                            "metadata": self.metadata[int(idx)]
+                        }
+                    all_results[idx]["semantic_scores"].append(float(score))
+        
+        # ── Step 3: BM25 keyword retrieval bonus ──
         if self.bm25:
-            query_tokens = query.lower().split()
-            bm25_scores = self.bm25.get_scores(query_tokens)
-            # Normalize BM25 scores to [0, 1]
-            max_bm25 = max(bm25_scores) if max(bm25_scores) > 0 else 1.0
-            for idx, score in enumerate(bm25_scores):
-                if score > 0:
-                    keyword_results[idx] = score / max_bm25
+            for expanded_query in expanded_queries:
+                query_tokens = expanded_query.lower().split()
+                bm25_scores = self.bm25.get_scores(query_tokens)
+                max_bm25 = max(bm25_scores) if max(bm25_scores) > 0 else 1.0
+                
+                for idx, score in enumerate(bm25_scores):
+                    if score > 0:
+                        if idx not in all_results:
+                            all_results[idx] = {
+                                "semantic_scores": [],
+                                "keyword_scores": [],
+                                "metadata": self.metadata[int(idx)]
+                            }
+                        all_results[idx]["keyword_scores"].append(score / max_bm25)
         
-        # ── Hybrid fusion: reciprocal rank fusion ──
-        fused_scores = {}
-        for idx in set(list(semantic_results.keys()) + list(keyword_results.keys())):
-            sem_score = semantic_results.get(idx, 0.0)
-            kw_score = keyword_results.get(idx, 0.0)
-            # Blend scores
-            fused_score = hybrid_weight * sem_score + (1 - hybrid_weight) * kw_score
-            fused_scores[idx] = fused_score
+        # ── Step 4: Combine and normalize scores ──
+        candidates = []
+        for idx, result_data in all_results.items():
+            # Average scores across expansions
+            avg_semantic = sum(result_data["semantic_scores"]) / len(result_data["semantic_scores"]) if result_data["semantic_scores"] else 0.0
+            avg_keyword = sum(result_data["keyword_scores"]) / len(result_data["keyword_scores"]) if result_data["keyword_scores"] else 0.0
+            
+            fused_score = hybrid_weight * avg_semantic + (1 - hybrid_weight) * avg_keyword
+            
+            candidate = dict(result_data["metadata"])
+            candidate["similarity"] = float(fused_score)
+            candidate["semantic_score"] = float(avg_semantic)
+            candidate["keyword_score"] = float(avg_keyword)
+            candidates.append(candidate)
         
-        # ── Sort by fused score and return top-k ──
-        sorted_results = sorted(fused_scores.items(), key=lambda x: x[1], reverse=True)[:k]
+        # ── Step 5: Polarity-aware re-ranking ──
+        # Create a decomposed prompt from the original query for attribute extraction
+        decomposed = DecomposedPrompt(
+            original=query,
+            tasks=[EditTask(raw=query, edit_type="generic")],
+        )
         
-        results = []
-        for idx, score in sorted_results:
-            entry = dict(self.metadata[int(idx)])
-            entry["similarity"] = float(score)
-            entry["semantic_score"] = semantic_results.get(int(idx), 0.0)
-            entry["keyword_score"] = keyword_results.get(int(idx), 0.0)
-            results.append(entry)
+        scorer = RAGRetrieverScorer()
+        rescored = scorer.score_results(decomposed, candidates, top_k=k * 2)
         
-        return results
+        # Return top-k with final scores
+        final_results = rescored[:k]
+        
+        logger.info(f"Retrieved {len(final_results)} results for '{query}' (polarity-aware)")
+        for r in final_results[:3]:
+            logger.debug(f"  - {r.get('instruction', '')[:60]}... (score: {r.get('relevance_score', 0):.3f})")
+        
+        return final_results
 
     def retrieve_for_decomposed_prompt(
         self, sub_prompts: List[str], k_each: int = 2
     ) -> Dict[str, List[Dict]]:
         """
-        Novelty 1: Decomposed retrieval.
-        Retrieves references per semantic sub-prompt independently using hybrid search.
+        Decomposed retrieval with query expansion per sub-task.
+        Retrieves references per semantic sub-prompt independently using 
+        hybrid search + polarity-aware re-ranking.
         """
         results = {}
         for sp in sub_prompts:
