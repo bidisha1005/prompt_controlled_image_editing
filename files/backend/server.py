@@ -4,6 +4,17 @@ FastAPI backend for RAG-guided Image Editing
 
 import sys
 import os
+
+# Load environment variables from .env file FIRST
+try:
+    from dotenv import load_dotenv
+    load_dotenv(os.path.join(os.path.dirname(os.path.dirname(__file__)), '.env'))
+except ImportError:
+    pass  # python-dotenv not installed, will use system env vars
+
+# Fix OpenMP duplicate initialization on macOS
+os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 import logging
@@ -46,6 +57,11 @@ _reconstructor: Optional[GroqPromptReconstructor] = None
 _memory: EditStateMemory = EditStateMemory()
 _scorer = RAGRetrieverScorer()
 
+# ─── Edit History / Snapshots ───────────────────────────────
+# Store snapshots: {s0: {image, state}, s1: {image, state}, ...}
+_snapshots: Dict[str, Dict[str, Any]] = {}
+_current_base_snapshot: str = "s0"  # Current snapshot to edit from
+
 
 def get_editor() -> ImageEditor:
     global _editor
@@ -72,12 +88,13 @@ def get_reconstructor() -> GroqPromptReconstructor:
 class EditRequest(BaseModel):
     image_b64: str          # Base64-encoded input image
     instruction: str        # User's editing instruction
-    image_guidance_scale: float = 1.5
-    text_guidance_scale: float  = 7.5
+    image_guidance_scale: float = 1.8
+    text_guidance_scale: float  = 7.0
     num_steps: int              = 30
     seed: Optional[int]         = None
     use_rag: bool               = True  # Toggle for ablation
     include_audio: bool         = False
+    branch_from: Optional[str]  = None  # Snapshot to branch from (e.g., "s0", "s1")
 
 
 class SelectedTrack(BaseModel):
@@ -102,6 +119,8 @@ class EditResponse(BaseModel):
     prompt_reconstruction: Dict[str, Any]
     edit_state: Dict[str, Any]
     selected_track: Optional[SelectedTrack] = None
+    snapshot_id: str = "s0"  # Current snapshot label (s0, s1, s2, ...)
+    available_snapshots: List[str] = Field(default_factory=list)  # List of available snapshot IDs
 
 
 class DecomposeRequest(BaseModel):
@@ -138,7 +157,6 @@ def decompose(req: DecomposeRequest):
         "edit_types":     result.edit_types,
     }
 
-
 @app.post("/select-audio", response_model=Optional[SelectedTrack])
 def select_audio(req: AudioSelectRequest):
     """Pick a background track from the local curated library."""
@@ -154,16 +172,60 @@ def select_audio(req: AudioSelectRequest):
 @app.post("/edit", response_model=EditResponse)
 def edit_image(req: EditRequest):
     """
-    Full RAG-guided editing pipeline:
-    1. Decompose prompt
-    2. Retrieve references per sub-task (RAG)
-    3. Enrich prompt with retrieved context + state memory
-    4. Run InstructPix2Pix
-    5. Update state memory
+    Full RAG-guided editing pipeline with snapshot history:
+    1. Load from base snapshot (s0 or selected branch point)
+    2. Decompose prompt
+    3. Retrieve references per sub-task (RAG)
+    4. Enrich prompt with retrieved context + state memory
+    5. Run InstructPix2Pix
+    6. Update state memory
+    7. Save new snapshot (s1, s2, etc.)
     """
+    global _snapshots, _current_base_snapshot, _memory
+    
     try:
-        # 1. Decode input image
-        input_image = base64_to_pil(req.image_b64)
+        # ── Determine starting image & state ──
+        # AUTO-BRANCH AFTER RESET: If only s0 exists (just reset), automatically branch from it
+        if "s0" in _snapshots and len(_snapshots) == 1 and not req.branch_from:
+            req.branch_from = "s0"
+            logger.info("Auto-branching from s0 after reset")
+        
+        if req.branch_from and req.branch_from in _snapshots:
+            # Branch from existing snapshot (e.g., s0, s1)
+            snap = _snapshots[req.branch_from]
+            current_image = snap["image"]
+            _memory = snap["memory"]  # Restore memory from snapshot
+            _current_base_snapshot = req.branch_from
+            logger.info(f"Branching from snapshot: {req.branch_from}")
+        else:
+            # Use provided image or error
+            if not req.image_b64:
+                raise HTTPException(status_code=400, detail="No image_b64 provided")
+            current_image = base64_to_pil(req.image_b64)
+            # Initialize or reset snapshots if new starting image
+            if req.branch_from is None or req.branch_from not in _snapshots:
+                # IMPORTANT: Preserve s0 if it already exists (after reset)
+                preserved_s0 = _snapshots.get("s0") if "s0" in _snapshots else None
+                _snapshots.clear()
+                _memory = EditStateMemory()
+                _current_base_snapshot = "s0"
+                # Save s0 (original) - either the preserved one or the new image
+                if preserved_s0:
+                    # Restore previously saved s0
+                    _snapshots["s0"] = preserved_s0
+                    logger.info("Restored preserved snapshot s0")
+                else:
+                    # First time - save current image as s0
+                    _snapshots["s0"] = {
+                        "image": current_image,
+                        "memory": EditStateMemory(),  # Fresh state for original
+                        "instruction": "Original",
+                        "metadata": {"type": "original"}
+                    }
+                    logger.info("Initialized snapshot s0 (original)")
+
+        # 1. Decode input image (already done above)
+        input_image = current_image
 
         # 2. Decompose prompt  [Novelty 1]
         decomposed = decompose_prompt(req.instruction)
@@ -197,7 +259,6 @@ def edit_image(req: EditRequest):
                 ]
 
         # 4. Reconstruct a concise prompt per sub-task & run sequentially
-        current_image = input_image
         reconstructor = get_reconstructor()
         reconstructed_prompts: List[str] = []
         prompt_reconstruction: Dict[str, Any] = {}
@@ -241,7 +302,22 @@ def edit_image(req: EditRequest):
             decomposed_step = decompose_prompt(sub_task)
             _memory.update(decomposed_step)
 
+        # ── Save new snapshot ──
         edited = current_image
+        next_snapshot_id = f"s{len(_snapshots)}"
+        _snapshots[next_snapshot_id] = {
+            "image": edited,
+            "memory": _memory,  # Save current state
+            "instruction": req.instruction,
+            "metadata": {
+                "type": "edit",
+                "branch_from": _current_base_snapshot,
+                "sub_tasks": decomposed.sub_tasks,
+            }
+        }
+        _current_base_snapshot = next_snapshot_id
+        logger.info(f"Saved snapshot: {next_snapshot_id}")
+
         enriched_prompt = "; ".join(reconstructed_prompts)
         selected_track = select_track(req.instruction) if req.include_audio else None
 
@@ -255,6 +331,8 @@ def edit_image(req: EditRequest):
             prompt_reconstruction=prompt_reconstruction,
             edit_state=_memory.to_dict(),
             selected_track=selected_track,
+            snapshot_id=next_snapshot_id,
+            available_snapshots=sorted(_snapshots.keys(), key=lambda x: int(x[1:])),
         )
 
     except Exception as e:
@@ -263,15 +341,77 @@ def edit_image(req: EditRequest):
 
 
 @app.post("/reset")
-def reset_memory(_: ResetRequest = None):
-    """Reset the edit state memory for a new session."""
-    _memory.reset()
-    return {"status": "memory reset"}
+@app.get("/reset")  # Also accept GET for convenience
+def reset_memory(_: Optional[ResetRequest] = None):
+    """Reset the edit state memory but preserve original (s0).
+    
+    Keeps s0 (original), clears s1, s2, s3, etc.
+    Resets edit state memory to fresh state.
+    """
+    global _memory, _snapshots, _current_base_snapshot
+    
+    # Keep only s0, clear everything else
+    if "s0" in _snapshots:
+        s0_snapshot = _snapshots["s0"]
+        _snapshots.clear()
+        _snapshots["s0"] = s0_snapshot
+    else:
+        _snapshots.clear()
+    
+    # Reset memory to fresh state
+    _memory = EditStateMemory()
+    _current_base_snapshot = "s0"
+    
+    logger.info("Edit state memory reset — s0 preserved, all edits cleared")
+    return {
+        "status": "memory reset",
+        "preserved": "s0 (original)",
+        "available_snapshots": list(_snapshots.keys()),
+    }
+
+
+@app.get("/snapshots")
+def get_snapshots():
+    """Get all available snapshots with metadata (no large images).
+    
+    Returns: {
+        s0: {id: "s0", instruction: "Original", metadata: {...}},
+        s1: {id: "s1", instruction: "...", metadata: {...}},
+        ...
+    }
+    """
+    result = {}
+    for snap_id in sorted(_snapshots.keys(), key=lambda x: int(x[1:])):
+        snap = _snapshots[snap_id]
+        result[snap_id] = {
+            "id": snap_id,
+            "instruction": snap.get("instruction", ""),
+            "metadata": snap.get("metadata", {}),
+        }
+    return result
+
+
+@app.get("/snapshots/{snap_id}/thumbnail")
+def get_snapshot_thumbnail(snap_id: str):
+    """Get thumbnail (small image) for a snapshot."""
+    if snap_id not in _snapshots:
+        raise HTTPException(status_code=404, detail=f"Snapshot {snap_id} not found")
+    
+    img = _snapshots[snap_id]["image"]
+    # Resize to thumbnail size (200x150)
+    thumbnail = img.copy()
+    thumbnail.thumbnail((200, 150))
+    return {"image_b64": pil_to_base64(thumbnail)}
 
 
 @app.get("/state")
 def get_state():
-    return _memory.to_dict()
+    global _current_base_snapshot
+    return {
+        **_memory.to_dict(),
+        "current_snapshot": _current_base_snapshot,
+        "available_snapshots": sorted(_snapshots.keys(), key=lambda x: int(x[1:])),
+    }
 
 
 # ─── Dev entry point ─────────────────────────────────────────

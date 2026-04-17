@@ -6,7 +6,6 @@ Wraps timbrooks/instruct-pix2pix from Hugging Face.
 import io
 import base64
 import logging
-import os
 from typing import Optional, Tuple
 from PIL import Image
 import torch
@@ -28,14 +27,14 @@ class ImageEditor:
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         logger.info(f"ImageEditor device: {self.device}")
 
+    def is_ready(self) -> bool:
+        """Check if pipeline is loaded and ready."""
+        return self._pipe is not None
+
     def _load(self):
         if self._pipe is not None:
             return
-        cache_dir = os.getenv("HF_HOME") or os.getenv("HUGGINGFACE_HUB_CACHE") or "default Hugging Face cache"
-        logger.info(
-            "Loading InstructPix2Pix pipeline. First run may download several GB of model weights to %s.",
-            cache_dir,
-        )
+        logger.info("Loading InstructPix2Pix pipeline…")
         dtype = torch.float16 if self.device == "cuda" else torch.float32
         self._pipe = StableDiffusionInstructPix2PixPipeline.from_pretrained(
             MODEL_ID,
@@ -50,16 +49,6 @@ class ImageEditor:
             self._pipe.enable_attention_slicing()
         logger.info("Pipeline ready ✅")
 
-    def is_ready(self) -> bool:
-        return self._pipe is not None
-
-    def status(self) -> dict:
-        return {
-            "model_id": MODEL_ID,
-            "device": self.device,
-            "loaded": self.is_ready(),
-        }
-
     # ─────────────────────────────────────────
     # Core edit method
     # ─────────────────────────────────────────
@@ -67,8 +56,8 @@ class ImageEditor:
         self,
         image: Image.Image,
         instruction: str,
-        image_guidance_scale: float = 1.5,
-        text_guidance_scale: float  = 7.5,
+        image_guidance_scale: float = 1.8,
+        text_guidance_scale: float  = 7.0,
         num_inference_steps: int    = 30,
         num_images: int             = 1,
         seed: Optional[int]         = None,
@@ -78,14 +67,14 @@ class ImageEditor:
 
         Args:
             image:                Input PIL image
-            instruction:          Editing instruction string
-            image_guidance_scale: How much to preserve original image structure (1–2)
-            text_guidance_scale:  How strictly to follow text instruction (5–10)
+            instruction:          Editing instruction string (should specify ONLY target object)
+            image_guidance_scale: How much to preserve original image structure (1.5–2.0, higher = more conservative)
+            text_guidance_scale:  How strictly to follow text instruction (6–8 for precise edits)
             num_inference_steps:  Diffusion steps (20–50 recommended)
             num_images:           Number of candidates to generate
             seed:                 Optional random seed for reproducibility
         Returns:
-            Best edited PIL image
+            Best edited PIL image (or first of candidates if num_images > 1)
         """
         self._load()
         image = _preprocess(image)
