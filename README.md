@@ -168,6 +168,15 @@ requirements.txt
 
 Toggle `use_rag` in the UI or API to run ablation comparisons.
 
+## To run using modal configuration
+```
+cd files
+source rag_env/bin/activate
+export MODAL_ENDPOINT="https://bidisha-paul10--flux-kontext-fastapi-fastapi-app.modal.run"
+export MODAL_BEARER_TOKEN="your_token_here"
+python3 -m backend.server_modal
+```
+
 <img width="1440" height="815" alt="image" src="https://github.com/user-attachments/assets/33e2ba5f-912c-4edb-9547-23c478b07cdc" />
 
 <img width="1440" height="815" alt="image" src="https://github.com/user-attachments/assets/9db31947-b786-44bd-902f-c82e8bbb7ce0" />
