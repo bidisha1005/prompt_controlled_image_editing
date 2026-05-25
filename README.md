@@ -167,3 +167,7 @@ requirements.txt
 | **Proposed** | `true` | `true` |
 
 Toggle `use_rag` in the UI or API to run ablation comparisons.
+
+<img width="1440" height="815" alt="image" src="https://github.com/user-attachments/assets/33e2ba5f-912c-4edb-9547-23c478b07cdc" />
+
+<img width="1440" height="815" alt="image" src="https://github.com/user-attachments/assets/9db31947-b786-44bd-902f-c82e8bbb7ce0" />
